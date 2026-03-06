@@ -2,8 +2,6 @@ fastapi
 uvicorn
 sqlalchemy
 psycopg2-binary
-redis
-neo4j
 python-dotenv
 pydantic
 pydantic-settings

@@ -4,9 +4,10 @@ from core.config import settings
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
-
-from api.detection import router as detection_router
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
 from api.honeypot import router as honeypot_router
 from api.inoculation import router as inoculation_router
 from api.voice import router as voice_router
