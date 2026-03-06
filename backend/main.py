@@ -51,7 +51,7 @@ app.include_router(profiling_router, prefix="/api/v1/profiling", tags=["profilin
 # Configure CORS for Dashboard access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust in production
+    allow_origins=["*"], # In production, replace with your Vercel URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
