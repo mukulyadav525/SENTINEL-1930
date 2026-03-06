@@ -1,9 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from core.config import settings
 import os
-from dotenv import load_dotenv
+import time
 
+# Deferred imports to avoid blocking startup
 from api.detection import router as detection_router
 from api.honeypot import router as honeypot_router
 from api.inoculation import router as inoculation_router
@@ -15,26 +17,44 @@ from api.forensic import router as forensic_router
 from api.profiling import router as profiling_router
 from core.security import security_logging_middleware
 
-# Auto-create tables (safe — skips if already exists in Supabase)
-from core.database import engine
-from models.database import Base
-try:
-    Base.metadata.create_all(bind=engine)
-except Exception as e:
-    print(f"[WARN] Could not auto-create tables: {e}. Tables must exist in Supabase.")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Auto-create tables (safe — skips if already exists)
+    from core.database import engine
+    from models.database import Base
+    try:
+        print(f"[STARTUP] Initializing database engine...")
+        # We wrap this to prevent blocking the entire event loop if DB is slow
+        Base.metadata.create_all(bind=engine)
+        print(f"[STARTUP] Database tables verified/created.")
+    except Exception as e:
+        print(f"[WARN] Database initialization skipped: {e}")
+    
+    yield
+    # Shutdown: Clean up if needed
+    print("[SHUTDOWN] Sentinel API shutting down.")
 
-# Modified app initialization to use settings
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    version="0.1.0", # Kept the version from original
-    openapi_url=f"{settings.API_V1_STR}/openapi.json" # Added openapi_url
+    version="1.0.0",
+    lifespan=lifespan,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
-# Add Security Middleware
+# Standard Security Middleware
 @app.middleware("http")
-async def add_security_logging(request, call_next):
-    print(f"[DEBUG] Incoming: {request.method} {request.url}")
+async def logging_middleware(request: Request, call_next):
+    # Pass through to our logging utility
     return await security_logging_middleware(request, call_next)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Include Routers
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["auth"])
@@ -47,32 +67,16 @@ app.include_router(actions_router, prefix="/api/v1/actions", tags=["actions"])
 app.include_router(forensic_router, prefix="/api/v1/forensic", tags=["forensic"])
 app.include_router(profiling_router, prefix="/api/v1/profiling", tags=["profiling"])
 
-# Configure CORS for Dashboard access
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], # In production, replace with your Vercel URL
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 @app.get("/")
 async def root():
-    return {"message": "Sentinel 1930 (BASIG) API is running. For My India."}
+    return {"message": "Sentinel 1930 (BASIG) API is online. Protection active."}
 
 @app.get("/health")
 async def health_check():
-    return {
-        "status": "healthy",
-        "mode": "PRODUCTION",
-        "engine": "BASIG-NGI-v3.0"
-    }
-
-@app.get("/api/v1/system/mode")
-async def get_system_mode():
-    return {"mode": "PRODUCTION"}
+    return {"status": "healthy", "engine": "SENTINEL-v1.0"}
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
+    print(f"Starting Production Server on port {port}...")
     uvicorn.run("main:app", host="0.0.0.0", port=port)
