@@ -1,5 +1,4 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, ForeignKey, Boolean, Enum as SQLEnum
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 import datetime
@@ -39,7 +38,7 @@ class CallRecord(Base):
     call_type = Column(String)  # 'incoming', 'outgoing'
     
     # Metadata for scoring
-    metadata_json = Column(JSONB)  # { 'location': '...', 'imei': '...', 'sim_age': '...' }
+    metadata_json = Column(JSON)  # { 'location': '...', 'imei': '...', 'sim_age': '...' }
     
     # Results
     fraud_risk_score = Column(Float)
@@ -96,7 +95,7 @@ class SystemStat(Base):
     category = Column(String, index=True) # e.g., 'mule', 'deepfake', 'upi'
     key = Column(String, index=True)
     value = Column(String)
-    metadata_json = Column(JSONB)
+    metadata_json = Column(JSON)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 class SystemAction(Base):
@@ -105,7 +104,7 @@ class SystemAction(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     action_type = Column(String, nullable=False)
     target_id = Column(String, nullable=True)
-    metadata_json = Column(JSONB, nullable=True)
+    metadata_json = Column(JSON, nullable=True)
     status = Column(String, default="success")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 

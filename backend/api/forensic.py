@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-import google.generativeai as genai
+import httpx
 from core.config import settings
 from core.auth import get_current_user
 from core.database import get_db
@@ -12,9 +12,8 @@ import random
 
 router = APIRouter()
 
-# Configure Gemini
-genai.configure(api_key=settings.GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+# Sarvam AI endpoint (same as core/ai.py)
+SARVAM_CHAT_URL = "https://api.sarvam.ai/v1/chat/completions"
 
 @router.post("/deepfake/analyze", response_model=ForensicResponse)
 async def analyze_deepfake(
@@ -23,11 +22,11 @@ async def analyze_deepfake(
     db: Session = Depends(get_db)
 ):
     """
-    Perform deepfake forensic analysis using Gemini AI.
+    Perform deepfake forensic analysis using Sarvam AI.
     Simulates a scan of facial geometry and temporal consistency.
     """
     try:
-        # Construct a prompt for Gemini to act as a forensic scanner
+        # Construct a prompt for Sarvam AI to act as a forensic scanner
         prompt = """
         You are the Sentinel 1930 Visual Forensic Engine. 
         Perform a forensic analysis for a potential deepfake.
@@ -41,13 +40,34 @@ async def analyze_deepfake(
            - visual_artifacts: (e.g., "None", "Edge blurring found")
         
         Bias: Historically, 40% of scans are Deepfakes.
+        Return ONLY the JSON, no markdown or explanation.
         """
 
-        response = model.generate_content(prompt)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                SARVAM_CHAT_URL,
+                headers={
+                    "api-subscription-key": settings.SARVAM_API_KEY,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "sarvam-m",
+                    "messages": [
+                        {"role": "system", "content": "You are a forensic analysis engine. Always respond with valid JSON only."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.3,
+                    "max_tokens": 500,
+                },
+            )
+
+        if response.status_code != 200:
+            raise Exception(f"Sarvam API error: {response.status_code}")
+
+        ai_data = response.json()
+        content = ai_data["choices"][0]["message"]["content"].strip()
         
-        # Parse Gemini response (very simplistic parsing, logic could be more robust)
-        # Assuming Gemini returns clean JSON as requested
-        content = response.text.strip()
+        # Parse JSON from response (handle markdown fences if present)
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
@@ -78,7 +98,7 @@ async def analyze_deepfake(
 
     except Exception as e:
         # Fallback to a deterministic but realistic simulation if AI fails
-        print(f"Gemini Forensic Error: {e}")
+        print(f"Sarvam Forensic Error: {e}")
         return ForensicResponse(
             verdict="DEEPFAKE" if random.random() > 0.6 else "VERIFIED",
             confidence=round(random.uniform(0.85, 0.99), 2),
@@ -90,3 +110,4 @@ async def analyze_deepfake(
             },
             timestamp=datetime.datetime.utcnow()
         )
+

@@ -10,4 +10,4 @@ passlib[bcrypt]
 bcrypt
 python-multipart
 supabase
-google-generativeai
+httpx
