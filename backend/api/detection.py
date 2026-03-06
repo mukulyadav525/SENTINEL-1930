@@ -1,0 +1,83 @@
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from typing import List, Dict
+from core.database import get_db
+from schemas.detection import CallCreate, DetectionResponse
+from models.database import CallRecord, DetectionDetail
+from core.scoring import calculate_fraud_risk
+import datetime
+
+router = APIRouter()
+
+@router.post("/detect", response_model=DetectionResponse)
+def detect_fraud(call_in: CallCreate, db: Session = Depends(get_db)):
+    # Calculate Risk Score
+    scoring_result = calculate_fraud_risk(call_in.caller_num, call_in.metadata)
+    
+    # Create Call Record
+    db_call = CallRecord(
+        caller_num=call_in.caller_num,
+        receiver_num=call_in.receiver_num,
+        duration=call_in.duration,
+        call_type=call_in.call_type,
+        metadata_json=call_in.metadata,
+        fraud_risk_score=scoring_result["score"],
+        verdict=scoring_result["verdict"]
+    )
+    db.add(db_call)
+    db.commit()
+    db.refresh(db_call)
+    
+    # Add Feature Details
+    for feat in scoring_result["features"]:
+        db_detail = DetectionDetail(
+            call_id=db_call.id,
+            feature_name=feat["name"],
+            feature_value=feat["value"],
+            impact_score=feat["impact"]
+        )
+        db.add(db_detail)
+    
+    db.commit()
+    
+    return {
+        "call_id": db_call.id,
+        "fraud_risk_score": db_call.fraud_risk_score,
+        "verdict": db_call.verdict,
+        "timestamp": db_call.timestamp
+    }
+
+@router.get("/calls", response_model=List[Dict])
+def get_recent_calls(
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    calls = db.query(CallRecord).order_by(CallRecord.timestamp.desc()).limit(limit).all()
+    return [
+        {
+            "id": c.id,
+            "number": c.caller_num,
+            "location": c.metadata_json.get("location", "Unknown") if c.metadata_json else "Unknown",
+            "score": c.fraud_risk_score,
+            "status": c.verdict.capitalize(),
+            "timestamp": c.timestamp
+        }
+        for c in calls
+    ]
+
+@router.get("/stats")
+def get_detection_stats(db: Session = Depends(get_db)):
+    # Simple aggregation for risk vectors
+    total_scams = db.query(CallRecord).filter(CallRecord.verdict == "scam").count()
+    
+    return {
+        "risk_vectors": [
+            {"name": "Telecom Velocity", "value": 2},
+            {"name": "Geographic Anomaly", "value": min(100, total_scams * 5)},
+            {"name": "Reputation Match", "value": min(100, total_scams * 8)},
+            {"name": "Script Pattern", "value": min(100, total_scams * 3)}
+        ],
+        "active_nodes": 4,
+        "latency_ms": 38
+    }

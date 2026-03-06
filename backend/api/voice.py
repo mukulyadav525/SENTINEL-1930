@@ -1,0 +1,115 @@
+"""
+API Router for Voice Chat (Sarvam AI Integration).
+Provides endpoints for real-time voice interactions with the AI Honeypot.
+"""
+
+import base64
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from typing import Optional, List, Dict
+from core.voice_engine import voice_engine
+from core.ai import honeypot_ai
+from sqlalchemy.orm import Session
+from core.database import get_db
+from models.database import HoneypotPersona
+
+router = APIRouter(prefix="/voice", tags=["Voice Chat"])
+
+
+class VoiceChatRequest(BaseModel):
+    """Request body for a voice chat turn."""
+    audio_base64: str  # Base64-encoded audio from scammer's call
+    persona: str = "Elderly Uncle"
+    language: str = "hi-IN"
+    history: List[Dict[str, str]] = []
+
+
+class VoiceChatResponse(BaseModel):
+    """Response body containing AI's voice reply."""
+    scammer_transcript: str
+    ai_response_text: str
+    ai_audio_base64: str
+    audio_format: str
+    language: str
+    persona: str
+
+
+class TTSRequest(BaseModel):
+    """Request body for text-to-speech only."""
+    text: str
+    persona: str = "Elderly Uncle"
+
+
+class STTRequest(BaseModel):
+    """Request body for speech-to-text only."""
+    audio_base64: str
+    language: str = "hi-IN"
+
+
+@router.post("/chat", response_model=VoiceChatResponse)
+async def voice_chat_turn(request: VoiceChatRequest):
+    """
+    Complete voice chat turn:
+    1. Transcribes scammer audio (STT via Sarvam Saaras)
+    2. Generates AI honeypot response (via Gemini)
+    3. Synthesizes AI voice reply (TTS via Sarvam Bulbul)
+    """
+    try:
+        audio_bytes = base64.b64decode(request.audio_base64)
+
+        result = await voice_engine.voice_chat_turn(
+            scammer_audio=audio_bytes,
+            persona=request.persona,
+            ai_generate_fn=honeypot_ai.generate_response,
+            history=request.history,
+        )
+
+        return VoiceChatResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Voice chat error: {str(e)}")
+
+
+@router.post("/tts")
+async def text_to_speech(request: TTSRequest):
+    """Convert text to speech using Sarvam Bulbul v3."""
+    try:
+        result = await voice_engine.synthesize_speech(
+            text=request.text,
+            persona=request.persona,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TTS error: {str(e)}")
+
+
+@router.post("/stt")
+async def speech_to_text(request: STTRequest):
+    """Convert speech to text using Sarvam Saaras v3."""
+    try:
+        audio_bytes = base64.b64decode(request.audio_base64)
+        result = await voice_engine.transcribe_audio(
+            audio_bytes=audio_bytes,
+            language=request.language,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"STT error: {str(e)}")
+
+
+@router.get("/personas")
+async def list_personas(db: Session = Depends(get_db)):
+    """List available voice personas with their language configurations."""
+    personas = db.query(HoneypotPersona).all()
+    if not personas:
+        # Fallback to default if DB is empty
+        return {
+            "personas": [
+                {
+                    "name": "Sentinel AI",
+                    "language": "hi-IN",
+                    "speaker": "Male",
+                    "pace": 1.0,
+                }
+            ]
+        }
+    return {"personas": personas}
