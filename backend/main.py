@@ -19,7 +19,10 @@ from core.security import security_logging_middleware
 from core.database import engine
 from models.database import Base
 try:
-    Base.metadata.create_all(bind=engine)
+    if "sqlite" in str(engine.url):
+        Base.metadata.create_all(bind=engine)
+    else:
+        print("[INFO] Skipping auto-create tables for remote database.")
 except Exception as e:
     print(f"[WARN] Could not auto-create tables: {e}. Tables must exist in Supabase.")
 
