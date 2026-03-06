@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/api/v1";
+const API_BASE_RAW = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/api/v1";
+const API_BASE = API_BASE_RAW.endsWith("/") ? API_BASE_RAW.slice(0, -1) : API_BASE_RAW;
 
 interface AuthUser {
     username: string;
