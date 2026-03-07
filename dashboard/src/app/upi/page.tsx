@@ -48,6 +48,11 @@ export default function UPIPage() {
     const [qrScanning, setQrScanning] = useState(false);
     const [qrResult, setQrResult] = useState(false);
 
+    // Message Scanner State
+    const [messageText, setMessageText] = useState("");
+    const [isScanning, setIsScanning] = useState(false);
+    const [scanResult, setScanResult] = useState<any>(null);
+
     useEffect(() => {
         const fetchStats = async () => {
             try {
@@ -71,6 +76,30 @@ export default function UPIPage() {
             // Simulate risk logic
             setLookupResult(upiId.toLowerCase().includes('win') || upiId.toLowerCase().includes('prize') ? 'RISK' : 'SAFE');
         }, 1500);
+    };
+
+    const handleMessageScan = async () => {
+        if (!messageText) return;
+        setIsScanning(true);
+        setScanResult(null);
+
+        try {
+            const res = await fetch(`${API_BASE}/upi/scan-message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: messageText })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setScanResult(data);
+            } else {
+                console.error("Failed to scan message");
+            }
+        } catch (error) {
+            console.error("Error scanning message:", error);
+        } finally {
+            setIsScanning(false);
+        }
     };
 
     return (
@@ -217,21 +246,74 @@ export default function UPIPage() {
                             </h3>
 
                             <div className="space-y-6">
-                                <div className="p-4 bg-boxbg rounded-2xl border border-silver/10 text-sm text-charcoal italic leading-relaxed">
-                                    "CONGRATULATIONS! You have won Rs. 75,00,000 in KBC Lottery. To claim your prize, click this link to pay Rs 499 processing fee on VPA: kbc-rewards@upi and share screenshot."
+                                <textarea
+                                    className="w-full p-4 bg-boxbg border border-silver/10 rounded-2xl text-sm text-charcoal outline-none focus:border-saffron/40 resize-none min-h-[120px]"
+                                    placeholder="Paste suspicious WhatsApp message, SMS, or email here..."
+                                    value={messageText}
+                                    onChange={(e) => setMessageText(e.target.value)}
+                                ></textarea>
+
+                                <div className="flex justify-start">
+                                    <button
+                                        onClick={handleMessageScan}
+                                        disabled={isScanning || !messageText}
+                                        className="bg-indblue text-white px-8 py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-charcoal transition-all disabled:opacity-50 flex items-center gap-2"
+                                    >
+                                        {isScanning && <Loader2 size={14} className="animate-spin" />}
+                                        {isScanning ? "Analyzing..." : "Scan Message"}
+                                    </button>
                                 </div>
-                                <div className="flex items-center gap-4 p-4 bg-red-50 border border-red-100 rounded-2xl">
-                                    <AlertTriangle className="text-redalert" />
-                                    <div>
-                                        <p className="text-xs font-bold text-redalert uppercase">High Probability Fraud (98.4%)</p>
-                                        <p className="text-[11px] text-charcoal">Pattern: "Lottery Claim" with "Advance Fee" VPA request.</p>
+
+                                {scanResult && (
+                                    <div className={`p-6 rounded-2xl border ${scanResult.verdict === 'SAFE' ? 'bg-indgreen/5 border-indgreen/20' : 'bg-red-50 border-red-200'} animate-in fade-in duration-500 space-y-4`}>
+                                        <div className="flex items-center gap-4">
+                                            {scanResult.verdict === 'SAFE' ? (
+                                                <div className="w-10 h-10 rounded-full bg-indgreen flex items-center justify-center text-white flex-shrink-0">
+                                                    <CheckCircle2 size={24} />
+                                                </div>
+                                            ) : (
+                                                <div className="w-10 h-10 rounded-full bg-redalert flex items-center justify-center text-white flex-shrink-0">
+                                                    <AlertTriangle size={24} />
+                                                </div>
+                                            )}
+
+                                            <div className="flex-1">
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <p className={`text-xs font-bold uppercase ${scanResult.verdict === 'SAFE' ? 'text-indgreen' : 'text-redalert'}`}>
+                                                        {scanResult.verdict === 'SAFE' ? 'Safe Communication' : `High Probability Fraud (${scanResult.confidence}%)`}
+                                                    </p>
+                                                </div>
+                                                <p className="text-[11px] text-charcoal">Pattern: {scanResult.pattern_detected}</p>
+                                            </div>
+
+                                            {scanResult.verdict === 'RISK' && (
+                                                <div className="ml-auto">
+                                                    <button
+                                                        onClick={() => performAction('INTERCEPT_MESSAGE', 'SCAM_DETECTED')}
+                                                        className="bg-redalert text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase hover:bg-red-700 transition-colors">
+                                                        Intercept Source
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {scanResult.extracted_vpas && scanResult.extracted_vpas.length > 0 && (
+                                            <div className="pt-4 border-t border-silver/10 mt-4">
+                                                <p className="text-[10px] font-bold text-silver uppercase mb-3">Extracted UPI Handles (VPAs)</p>
+                                                <div className="space-y-2">
+                                                    {scanResult.extracted_vpas.map((vpa: any, i: number) => (
+                                                        <div key={i} className={`flex justify-between items-center p-2 rounded bg-white border ${vpa.status === 'SAFE' ? 'border-indgreen/20' : 'border-red-200'} text-xs font-mono`}>
+                                                            <span className={vpa.status === 'SAFE' ? 'text-indblue' : 'text-redalert'}>{vpa.vpa}</span>
+                                                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${vpa.status === 'SAFE' ? 'bg-indgreen/10 text-indgreen' : 'bg-redalert text-white'}`}>
+                                                                {vpa.status}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="ml-auto">
-                                        <button
-                                            onClick={() => performAction('INTERCEPT_MESSAGE', 'KBC_SCAM')}
-                                            className="bg-redalert text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase">Intercept Source</button>
-                                    </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     )}
