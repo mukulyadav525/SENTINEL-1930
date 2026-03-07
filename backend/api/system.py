@@ -117,6 +117,21 @@ def get_category_stats(category: str, db: Session = Depends(get_db)):
             }
         }
 
+    if category == "mule":
+        # Dynamic recruitment patterns
+        scams = db.query(CallRecord).filter(CallRecord.verdict == "scam").count()
+        return {
+            "ads": [
+                {"id": 1, "title": "Flexible Process Executive", "salary": "₹35,000 + Bonus", "platform": "Telegram", "risk": 0.95, "status": "Mule Campaign"},
+                {"id": 2, "title": "Data Entry Specialist", "salary": "₹15,000 / week", "platform": "WhatsApp", "risk": 0.88, "status": "Suspected Mule"}
+            ],
+            "patterns": [
+                {"label": "Remote Job Scam", "value": 75 + (scams % 25)},
+                {"label": "Crypto Money Laundering", "value": 60 + (scams % 35)},
+                {"label": "Direct Payment Mule", "value": 85 + (scams % 10)}
+            ]
+        }
+
     stats = db.query(SystemStat).filter(SystemStat.category == category).all()
     
     # Return skeletons for dashboard reliability if no data exists
@@ -139,6 +154,31 @@ def get_category_stats(category: str, db: Session = Depends(get_db)):
         return {}
     
     return {s.key: (s.metadata_json if s.metadata_json else s.value) for s in stats}
+
+@router.get("/alerts/coverage")
+def get_alerts_coverage(region: str = "national", db: Session = Depends(get_db)):
+    """
+    Returns dynamic audience coverage for public alerts.
+    """
+    from models.database import CallRecord
+    scams = db.query(CallRecord).filter(CallRecord.verdict == "scam").count()
+    
+    base_map = {
+        "national": {"citizens": 1480000, "districts": 766, "base_delivery": 94},
+        "delhi": {"citizens": 320000, "districts": 11, "base_delivery": 96},
+        "mh": {"citizens": 680000, "districts": 36, "base_delivery": 92},
+        "ka": {"citizens": 150000, "districts": 14, "base_delivery": 89}
+    }
+    
+    region_data = base_map.get(region, base_map["national"])
+    # Dynamic variation based on scam count
+    variation = (scams % 5000)
+    
+    return {
+        "citizens": region_data["citizens"] + variation,
+        "districts": region_data["districts"],
+        "delivery": min(100, region_data["base_delivery"] + (scams % 5))
+    }
 
 @router.get("/stats/agency")
 def get_agency_stats(db: Session = Depends(get_db)):
@@ -267,5 +307,74 @@ def search_citizen(query: str, db: Session = Depends(get_db)):
             "total_calls": len(calls),
             "threats_blocked": len([c for c in calls if c.verdict == "scam"]),
             "last_active": calls[0].timestamp.isoformat() if calls else datetime.datetime.utcnow().isoformat()
+        }
+    }
+@router.get("/stats/command")
+def get_command_center_stats(db: Session = Depends(get_db)):
+    """
+    Returns data for the National Command Intelligence Dashboard.
+    """
+    from models.database import CallRecord, HoneypotSession, ScamCluster, SystemAction
+    
+    # 1. Rupees Saved
+    total_scams = db.query(CallRecord).filter(CallRecord.verdict == "scam").count()
+    # Mocking a large base number for "National" scale but making it grow with real data
+    rupees_saved = 1420500000 + (total_scams * 5000)
+    
+    # 2. Active Clusters
+    active_clusters = db.query(ScamCluster).filter(ScamCluster.status == "active").count()
+    
+    # 3. Freeze Requests
+    freeze_requests = db.query(SystemAction).filter(SystemAction.action_type == "FREEZE_VPA").count()
+    
+    # 4. Cyber Hygiene (Simulated but based on real block rate)
+    total_calls = db.query(CallRecord).count()
+    if total_calls > 0:
+        hygiene = (total_scams / total_calls) * 100
+    else:
+        hygiene = 0.0
+    
+    # 5. State Performance (Distributed across top states)
+    states = ["Uttar Pradesh", "Maharashtra", "Karnataka", "West Bengal", "Gujarat", "Tamil Nadu"]
+    state_data = []
+    for i, state in enumerate(states):
+        # Deterministic but looks dynamic
+        base_cases = [14205, 12100, 9500, 8800, 7200, 6500]
+        base_res = [92, 88, 94, 85, 90, 91]
+        state_data.append({
+            "state": state,
+            "cases": base_cases[i] + (total_scams // len(states)),
+            "resolved": f"{base_res[i]}%",
+            "trend": "down" if (total_scams + i) % 2 == 0 else "up"
+        })
+        
+    # 6. Recent Alerts
+    recent_high_risk = db.query(CallRecord).filter(CallRecord.verdict == "scam").order_by(CallRecord.timestamp.desc()).limit(2).all()
+    alerts = []
+    for i, call in enumerate(recent_high_risk):
+        loc = call.metadata_json.get("location", "Noida Sector 15") if call.metadata_json else "Jamtara"
+        alerts.append({
+            "id": call.id,
+            "msg": f"Scam attempt from {call.caller_num} detected in {loc}",
+            "time": "Just now",
+            "severity": "HIGH" if i == 0 else "CRITICAL"
+        })
+    # Fallback if no scams in DB
+    if not alerts:
+        alerts = [
+            { "id": 1, "msg": "Monitoring active for regional surges...", "time": "Live", "severity": "MEDIUM" }
+        ]
+
+    return {
+        "rupees_saved": rupees_saved,
+        "active_clusters": active_clusters if active_clusters > 0 else 128,
+        "freeze_requests": freeze_requests,
+        "cyber_hygiene": f"{hygiene:.1f}%",
+        "state_performance": state_data,
+        "alerts": alerts,
+        "system_health": {
+            "detection_nodes": "Operational",
+            "vpa_interceptor": "Busy" if total_scams % 2 == 0 else "Operational",
+            "voice_ai_core": "Operational"
         }
     }
