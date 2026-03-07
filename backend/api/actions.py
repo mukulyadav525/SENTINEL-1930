@@ -39,6 +39,7 @@ async def perform_action(
             "FREEZE_VPA": f"Financial Freeze Request Dispatched for {req.target_id or 'VPA'}",
             "SCAN_VIDEO": "Deepfake Forensic Pipeline Active",
             "GENERATE_FIR": "Digital FIR Packet Compiled & Signed",
+            "GENERATE_FIR_FROM_GRAPH": "Digital FIR Correlated from Intelligence Graph",
             "DOWNLOAD_PLAYBOOK": f"Onboarding Playbook {req.target_id or ''} Downloaded",
             "RESTORE_ACCOUNT": "Account Restoration Workflow Initialized",
             "USE_LE_TOOL": f"Law Enforcement Tool {req.target_id or ''} Authorized",
@@ -118,16 +119,18 @@ async def get_download_file(
     """
     Returns a real minimal PDF file for the simulation from the static directory.
     """
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, Response
     import os
     
     # Path to the template we just copied
     static_file = os.path.join(os.getcwd(), "static", "sentinel_template.pdf")
     
     if not os.path.exists(static_file):
+        # Ensure static folder exists
+        os.makedirs(os.path.join(os.getcwd(), "static"), exist_ok=True)
         # Fallback to a plain text file if the copy failed somehow
-        from fastapi.responses import Response
-        return Response(content="%PDF-1.4\n% Sentinel Dummy\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Count 0 >> endobj\n%%EOF", media_type="application/pdf")
+        with open(static_file, "w") as f:
+            f.write("%PDF-1.4\n% Sentinel Dummy\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Count 0 >> endobj\n%%EOF")
 
     return FileResponse(
         path=static_file,
