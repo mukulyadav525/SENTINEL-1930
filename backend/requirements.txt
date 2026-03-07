@@ -13,3 +13,5 @@ supabase
 httpx
 google-genai
 pillow
+slowapi
+secure
