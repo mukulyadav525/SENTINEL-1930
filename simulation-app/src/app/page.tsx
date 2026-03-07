@@ -71,8 +71,7 @@ export default function SimulationPortal() {
     fetchPersonas();
   }, []);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const speechRecRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -145,123 +144,148 @@ export default function SimulationPortal() {
     setMessages([introMsg]);
   };
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
+  // ── Web Speech API: browser-side STT (free, no backend needed) ──
+  const startRecording = () => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        stream.getTracks().forEach(track => track.stop());
-        await processVoiceAudio(audioBlob);
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-    } catch (error) {
-      console.error("Microphone access denied:", error);
-      toast.error("Microphone access is required for voice mode.");
+    if (!SpeechRecognition) {
+      toast.error("Your browser does not support Speech Recognition. Use Chrome.");
+      return;
     }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "hi-IN";        // Hindi primary, also picks up English
+    recognition.interimResults = false; // Only final results
+    recognition.continuous = true;      // Keep listening until stopped
+    recognition.maxAlternatives = 1;
+
+    let finalTranscript = "";
+
+    recognition.onresult = (event: any) => {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript + " ";
+        }
+      }
+    };
+
+    recognition.onend = async () => {
+      setIsRecording(false);
+      const transcript = finalTranscript.trim();
+
+      if (!transcript) {
+        setMessages(prev => [...prev, {
+          role: "scammer",
+          text: "🎤 (Voice not captured clearly — try speaking louder)",
+          timestamp: new Date(),
+        }]);
+        return;
+      }
+
+      // Show what the scammer said
+      setMessages(prev => [...prev, {
+        role: "scammer",
+        text: transcript,
+        timestamp: new Date(),
+      }]);
+
+      // Send through text chat pipeline + TTS
+      await processVoiceTranscript(transcript);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error:", event.error);
+      setIsRecording(false);
+      if (event.error === "not-allowed") {
+        toast.error("Microphone access denied. Allow mic permissions.");
+      } else if (event.error !== "aborted") {
+        toast.error(`Speech error: ${event.error}`);
+      }
+    };
+
+    speechRecRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
+    if (speechRecRef.current && isRecording) {
+      speechRecRef.current.stop();
+      // onend handler above will process the transcript
     }
   };
 
-  const processVoiceAudio = async (blob: Blob) => {
+  // Process the transcript from Web Speech API through AI + TTS
+  const processVoiceTranscript = async (transcript: string) => {
     setIsLoading(true);
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      reader.onloadend = async () => {
-        const base64data = (reader.result as string).split(',')[1];
+      // 1. Get AI response via text chat endpoint
+      const chatRes = await fetch(`${API_BASE}/honeypot/direct-chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: transcript,
+          persona: selectedPersona?.id || "Elderly Uncle",
+          session_id: sessionId,
+          history: messages.map(m => ({
+            role: m.role === "scammer" ? "user" : "assistant",
+            content: m.text,
+          }))
+        }),
+      });
 
-        if (!base64data || base64data.length < 50) {
-          setMessages(prev => [...prev, {
-            role: "ai",
-            text: "⚠️ Recording too short. Hold the microphone button longer while speaking.",
-            timestamp: new Date(),
-          }]);
-          setIsLoading(false);
-          return;
-        }
+      let aiText = "⚠️ [System: AI generation failed.]";
+      if (chatRes.ok) {
+        const chatData = await chatRes.json();
+        aiText = chatData.response;
+      }
 
-        try {
-          const res = await fetch(`${API_BASE}/voice/chat`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              audio_base64: base64data,
-              persona: selectedPersona?.id || "Sentinel AI",
-              language: "hi-IN",
-              session_id: sessionId, // Track session on backend
-              history: messages.map(m => ({
-                role: m.role === "scammer" ? "user" : "assistant",
-                content: m.text,
-              }))
-            }),
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            const transcript = data.scammer_transcript || "";
-            if (transcript.length > 0) {
-              setMessages(prev => [...prev, {
-                role: "scammer",
-                text: transcript,
-                timestamp: new Date(),
-              }]);
-            } else {
-              setMessages(prev => [...prev, {
-                role: "scammer",
-                text: "🎤 (Voice not captured clearly — try speaking louder)",
-                timestamp: new Date(),
-              }]);
-            }
-
-            const aiMsg: ChatMessage = {
-              role: "ai",
-              text: data.ai_response_text,
-              audioBase64: data.ai_audio_base64,
-              timestamp: new Date(),
-            };
-            setMessages(prev => [...prev, aiMsg]);
-
-            if (autoPlayVoice && data.ai_audio_base64) {
-              playAudio(data.ai_audio_base64);
-            }
-          } else {
-            setMessages(prev => [...prev, {
-              role: "ai",
-              text: `⚠️ [System Error: Voice Engine Issue]. Try using Text Mode.`,
-              timestamp: new Date(),
-            }]);
-          }
-        } catch (fetchErr) {
-          console.error("Voice fetch failed:", fetchErr);
-          setMessages(prev => [...prev, {
-            role: "ai",
-            text: "⚠️ [System: Could not reach voice server.]",
-            timestamp: new Date(),
-          }]);
-        }
-        setIsLoading(false);
+      // 2. Add AI message
+      const aiMsg: ChatMessage = {
+        role: "ai",
+        text: aiText,
+        timestamp: new Date(),
       };
-    } catch (e) {
-      console.error("Processing audio failed:", e);
-      setIsLoading(false);
+      setMessages(prev => [...prev, aiMsg]);
+
+      // 3. Get TTS audio for the AI response
+      try {
+        const ttsRes = await fetch(`${API_BASE}/voice/tts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: aiText,
+            persona: selectedPersona?.id || "Elderly Uncle",
+          }),
+        });
+
+        if (ttsRes.ok) {
+          const ttsData = await ttsRes.json();
+          if (ttsData.audio_base64) {
+            setMessages(prev =>
+              prev.map((m, idx) =>
+                idx === prev.length - 1
+                  ? { ...m, audioBase64: ttsData.audio_base64 }
+                  : m
+              )
+            );
+            if (autoPlayVoice) playAudio(ttsData.audio_base64);
+          }
+        }
+      } catch (ttsErr) {
+        console.error("TTS fetch failed:", ttsErr);
+        // AI text is already shown, audio just won't play
+      }
+    } catch (error) {
+      console.error("Voice transcript processing failed:", error);
+      setMessages(prev => [...prev, {
+        role: "ai",
+        text: "⚠️ [System: API Connection Interrupted.]",
+        timestamp: new Date(),
+      }]);
     }
+    setIsLoading(false);
   };
 
   const sendMessage = async () => {
