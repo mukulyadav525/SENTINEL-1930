@@ -16,3 +16,4 @@ pillow
 slowapi
 secure
 pyzbar
+reportlab
