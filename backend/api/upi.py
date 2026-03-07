@@ -9,8 +9,6 @@ import datetime
 import re
 import json
 import io
-from PIL import Image
-from pyzbar.pyzbar import decode
 
 logger = logging.getLogger("sentinel.upi")
 
@@ -185,6 +183,20 @@ async def scan_qr_forensic(file: UploadFile = File(...), db: Session = Depends(g
     Decodes an uploaded QR Image, extracts the payload, and performs forensic mapping.
     """
     try:
+        # Lazy import to prevent crash if libzbar is not installed
+        try:
+            from PIL import Image
+            from pyzbar.pyzbar import decode
+        except ImportError:
+            logger.error("QR scanning libraries not available (libzbar missing)")
+            return {
+                "success": False,
+                "error": "QR scanning is not available on this server (missing libzbar system library).",
+                "is_safe": False,
+                "payload": "UNAVAILABLE",
+                "risk_factors": ["Server Configuration: libzbar not installed"]
+            }
+        
         contents = await file.read()
         image = Image.open(io.BytesIO(contents))
         
