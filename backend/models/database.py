@@ -73,6 +73,7 @@ class HoneypotSession(Base):
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String, unique=True, index=True)
     caller_num = Column(String)
+    customer_id = Column(String, index=True, nullable=True)
     persona = Column(String) # e.g., "Elderly Uncle"
     status = Column(String, default="active") # active, completed
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -123,6 +124,8 @@ class ScamCluster(Base):
     cluster_id = Column(String, unique=True, index=True)
     risk_level = Column(String) # CRITICAL, HIGH, MEDIUM
     location = Column(String)
+    lat = Column(Float, nullable=True)
+    lng = Column(Float, nullable=True)
     linked_vpas = Column(Integer, default=0)
     honeypot_hits = Column(Integer, default=0)
     status = Column(String, default="active")

@@ -37,14 +37,17 @@ export default function AlertsPage() {
     const [coverage, setCoverage] = useState({ citizens: 1480000, districts: 766, delivery: 94 });
 
     useEffect(() => {
-        const base = targetRegion === 'national' ? 1480000 : targetRegion === 'delhi' ? 320000 : targetRegion === 'mh' ? 680000 : 150000;
-        const dist = targetRegion === 'national' ? 766 : targetRegion === 'delhi' ? 11 : targetRegion === 'mh' ? 36 : 14;
-
-        setCoverage({
-            citizens: Math.floor(base + Math.random() * 5000),
-            districts: dist,
-            delivery: Math.floor(85 + Math.random() * 15)
-        });
+        const fetchCoverage = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/system/alerts/coverage?region=${targetRegion}`);
+                if (res.ok) {
+                    setCoverage(await res.json());
+                }
+            } catch (error) {
+                console.error("Error fetching coverage:", error);
+            }
+        };
+        fetchCoverage();
     }, [targetRegion]);
 
     useEffect(() => {

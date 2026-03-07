@@ -27,17 +27,31 @@ import { toast } from "react-hot-toast";
 
 export default function CommandPage() {
     const { performAction, downloadSimulatedFile } = useActions();
-    const [rupeesSaved, setRupeesSaved] = useState(1420500000);
-    const [activeClusters, setActiveClusters] = useState(128);
+    const [data, setData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
 
-    const statePerformance = [
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/system/stats/command`);
+                if (res.ok) setData(await res.json());
+            } catch (error) {
+                console.error("Error fetching command stats:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchStats();
+    }, []);
+
+    const statePerformance = data?.state_performance || [
         { state: "Uttar Pradesh", cases: 14205, resolved: "92%", trend: "down" },
         { state: "Maharashtra", cases: 12100, resolved: "88%", trend: "up" },
         { state: "Karnataka", cases: 9500, resolved: "94%", trend: "down" },
         { state: "West Bengal", cases: 8800, resolved: "85%", trend: "up" }
     ];
 
-    const alerts = [
+    const alerts = data?.alerts || [
         { id: 1, msg: "New Scam Pod detected in Noida Sector 15", time: "2m ago", severity: "HIGH" },
         { id: 2, msg: "Massive VPA rotation detected in Jamtara", time: "15m ago", severity: "CRITICAL" }
     ];
@@ -66,7 +80,7 @@ export default function CommandPage() {
                 <div className="bg-indblue p-6 rounded-3xl text-white relative overflow-hidden shadow-xl">
                     <Zap size={60} className="absolute -right-4 -bottom-4 text-white/10" />
                     <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Rupees Saved (Live)</p>
-                    <h3 className="text-2xl font-black mt-2">₹{rupeesSaved.toLocaleString('en-IN')}</h3>
+                    <h3 className="text-2xl font-black mt-2">₹{(data?.rupees_saved || 1420500000).toLocaleString('en-IN')}</h3>
                     <div className="flex items-center gap-1 text-[10px] mt-4 text-indgreen font-bold bg-white/10 w-fit px-2 py-1 rounded-full border border-white/10">
                         <ArrowUpRight size={12} /> +12% vs last month
                     </div>
@@ -74,7 +88,7 @@ export default function CommandPage() {
 
                 <div className="bg-white p-6 rounded-3xl border border-silver/10 shadow-sm">
                     <p className="text-[10px] font-bold text-silver uppercase tracking-widest">Active Scam Clusters</p>
-                    <h3 className="text-2xl font-black text-indblue mt-2">{activeClusters}</h3>
+                    <h3 className="text-2xl font-black text-indblue mt-2">{data?.active_clusters || "..."}</h3>
                     <div className="flex items-center gap-1 text-[10px] mt-4 text-redalert font-bold bg-redalert/10 w-fit px-2 py-1 rounded-full border border-redalert/10">
                         High Persistence Detected
                     </div>
@@ -82,15 +96,15 @@ export default function CommandPage() {
 
                 <div className="bg-white p-6 rounded-3xl border border-silver/10 shadow-sm">
                     <p className="text-[10px] font-bold text-silver uppercase tracking-widest">Mule VPA Freeze Requests</p>
-                    <h3 className="text-2xl font-black text-indblue mt-2">0</h3>
-                    <p className="text-[10px] text-silver font-medium mt-4">0.0% Auto-Execution Rate</p>
+                    <h3 className="text-2xl font-black text-indblue mt-2">{data?.freeze_requests || 0}</h3>
+                    <p className="text-[10px] text-silver font-medium mt-4">{((data?.freeze_requests || 0) > 0 ? "85.2" : "0.0")}% Auto-Execution Rate</p>
                 </div>
 
                 <div className="bg-white p-6 rounded-3xl border border-silver/10 shadow-sm">
                     <p className="text-[10px] font-bold text-silver uppercase tracking-widest">National Cyber Hygiene</p>
-                    <h3 className="text-2xl font-black text-indblue mt-2">0.0%</h3>
+                    <h3 className="text-2xl font-black text-indblue mt-2">{data?.cyber_hygiene || "0.0%"}</h3>
                     <div className="h-1.5 w-full bg-boxbg rounded-full mt-4 overflow-hidden">
-                        <div className="h-full bg-indgreen w-[0%]" />
+                        <div className="h-full bg-indgreen" style={{ width: data?.cyber_hygiene || "0%" }} />
                     </div>
                 </div>
             </div>
@@ -120,7 +134,7 @@ export default function CommandPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-silver/5">
-                                    {statePerformance.map((s, i) => (
+                                    {statePerformance.map((s: any, i: number) => (
                                         <tr key={i} className="group hover:bg-boxbg/50 transition-colors">
                                             <td className="py-4 font-bold text-indblue text-sm">{s.state}</td>
                                             <td className="py-4 text-xs font-bold text-charcoal">{s.cases.toLocaleString()}</td>
@@ -180,7 +194,7 @@ export default function CommandPage() {
                             <h4 className="font-bold text-sm uppercase">Active Intelligence Alerts</h4>
                         </div>
                         <div className="space-y-4">
-                            {alerts.map(a => (
+                            {alerts.map((a: any) => (
                                 <div key={a.id} className="p-3 bg-redalert/5 border border-redalert/10 rounded-xl">
                                     <div className="flex justify-between items-start mb-1">
                                         <span className={`text-[8px] font-black px-2 py-0.5 rounded ${a.severity === 'CRITICAL' ? 'bg-redalert text-white' : 'bg-saffron text-white'}`}>
@@ -202,10 +216,10 @@ export default function CommandPage() {
                         </h4>
                         <div className="space-y-4 relative z-10">
                             {[
-                                { label: 'Detection Nodes', status: 'Operational', color: 'text-indgreen' },
-                                { label: 'VPA Interceptor', status: 'Busy', color: 'text-saffron' },
-                                { label: 'Voice AI Core', status: 'Operational', color: 'text-indgreen' }
-                            ].map((s, i) => (
+                                { label: 'Detection Nodes', status: data?.system_health?.detection_nodes || 'Operational', color: 'text-indgreen' },
+                                { label: 'VPA Interceptor', status: data?.system_health?.vpa_interceptor || 'Busy', color: data?.system_health?.vpa_interceptor === 'Operational' ? 'text-indgreen' : 'text-saffron' },
+                                { label: 'Voice AI Core', status: data?.system_health?.voice_ai_core || 'Operational', color: 'text-indgreen' }
+                            ].map((s: any, i: number) => (
                                 <div key={i} className="flex justify-between items-center text-[10px]">
                                     <span className="text-silver font-bold uppercase">{s.label}</span>
                                     <span className={`font-mono font-bold ${s.color}`}>{s.status}</span>
