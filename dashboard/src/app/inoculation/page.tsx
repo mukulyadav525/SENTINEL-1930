@@ -59,7 +59,15 @@ export default function InoculationPage() {
     performAction('START_DRILL', phone, { scenario });
 
     let step = 0;
-    // ... (omitting interval for brevity in replacement but it will be preserved)
+    const interval = setInterval(() => {
+      if (step < data.scenarios[scenario].steps.length) {
+        setLogs(prev => [...prev, data.scenarios[scenario].steps[step]]);
+        step++;
+      } else {
+        clearInterval(interval);
+        setIsDrillRunning(false);
+      }
+    }, 1500);
   };
 
   useEffect(() => {
