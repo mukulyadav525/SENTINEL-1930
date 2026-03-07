@@ -25,35 +25,41 @@ def ensure_schema_compliance():
     """
     from sqlalchemy import text
     db = SessionLocal()
-    try:
-        # 1. Add customer_id to honeypot_sessions if missing
-        if "postgresql" in str(engine.url):
-            db.execute(text("ALTER TABLE honeypot_sessions ADD COLUMN IF NOT EXISTS customer_id VARCHAR;"))
-            
-            # 2. Add lat/lng to scam_clusters
-            db.execute(text("ALTER TABLE scam_clusters ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;"))
-            db.execute(text("ALTER TABLE scam_clusters ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;"))
-            
-            db.commit()
-            print("[SCHEMA] Columns verified/added to postgresql.")
-        elif "sqlite" in str(engine.url):
-            # SQLite doesn't support IF NOT EXISTS in ALTER TABLE well, so we check first
-            try:
-                db.execute(text("SELECT customer_id FROM honeypot_sessions LIMIT 1;"))
-            except Exception:
-                db.execute(text("ALTER TABLE honeypot_sessions ADD COLUMN customer_id VARCHAR;"))
-                print("[SCHEMA] Column 'customer_id' added to honeypot_sessions (SQLite).")
-            
-            try:
-                db.execute(text("SELECT lat FROM scam_clusters LIMIT 1;"))
-            except Exception:
-                db.execute(text("ALTER TABLE scam_clusters ADD COLUMN lat FLOAT;"))
-                db.execute(text("ALTER TABLE scam_clusters ADD COLUMN lng FLOAT;"))
-                print("[SCHEMA] Columns 'lat' and 'lng' added to scam_clusters (SQLite).")
+    
+    queries_pg = [
+        "ALTER TABLE honeypot_sessions ADD COLUMN IF NOT EXISTS customer_id VARCHAR;",
+        "ALTER TABLE scam_clusters ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;",
+        "ALTER TABLE scam_clusters ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;"
+    ]
+    
+    queries_sqlite = [
+        "ALTER TABLE honeypot_sessions ADD COLUMN customer_id VARCHAR;",
+        "ALTER TABLE scam_clusters ADD COLUMN lat FLOAT;",
+        "ALTER TABLE scam_clusters ADD COLUMN lng FLOAT;"
+    ]
 
-            db.commit()
+    try:
+        url_str = str(engine.url)
+        if "postgresql" in url_str:
+            for q in queries_pg:
+                try:
+                    db.execute(text(q))
+                    db.commit()
+                except Exception as e:
+                    db.rollback()
+                    print(f"[SCHEMA] PostgreSQL schema patch warning for '{q}': {e}")
+            print("[SCHEMA] PostgreSQL column checks complete.")
+            
+        elif "sqlite" in url_str:
+            for q in queries_sqlite:
+                try:
+                    db.execute(text(q))
+                    db.commit()
+                except Exception as e:
+                    db.rollback()
+            print("[SCHEMA] SQLite column checks complete.")
+            
     except Exception as e:
-        print(f"[SCHEMA] Migration warning: {e}")
-        db.rollback()
+        print(f"[SCHEMA] Fatal Migration error: {e}")
     finally:
         db.close()
