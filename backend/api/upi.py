@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File
 from sqlalchemy.orm import Session
 from core.database import get_db
 from models.database import SystemAction, SystemStat
@@ -8,6 +8,9 @@ import logging
 import datetime
 import re
 import json
+import io
+from PIL import Image
+from pyzbar.pyzbar import decode
 
 logger = logging.getLogger("sentinel.upi")
 
@@ -174,3 +177,110 @@ async def scan_whatsapp_message(req: MessageScanRequest, db: Session = Depends(g
         "pattern_detected": ai_result.get("pattern_detected", ""),
         "extracted_vpas": vpa_analysis
     }
+
+
+@router.post("/scan-qr", response_model=dict)
+async def scan_qr_forensic(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Decodes an uploaded QR Image, extracts the payload, and performs forensic mapping.
+    """
+    try:
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+        
+        # Decode the QR Code
+        decoded_objects = decode(image)
+        
+        if not decoded_objects:
+            return {
+                "success": False,
+                "error": "No QR Code detected in the image.",
+                "is_safe": False,
+                "payload": "UNREADABLE",
+                "risk_factors": ["Payload Read Failure"]
+            }
+            
+        # Extract payload from first QR found
+        raw_payload = decoded_objects[0].data.decode('utf-8')
+        
+        is_safe = True
+        risk_factors = []
+        merchant_vpa = None
+        
+        # Threat Modeling: 1. Is it a UPI redirect trap?
+        if "upi://pay" in raw_payload.lower():
+            # Extract the payee address
+            match = re.search(r'pa=([^&]+)', raw_payload)
+            if match:
+                merchant_vpa = match.group(1)
+                
+                # Check blocklist
+                if merchant_vpa.lower() in BLOCKLIST_VPAS:
+                    is_safe = False
+                    risk_factors.append(f"CRITICAL: Destination VPA ({merchant_vpa}) is on the National Blocklist.")
+                    
+                # Threat Modeling: 2. Merchant Mismatch / Destination Overlay
+                name_match = re.search(r'pn=([^&]+)', raw_payload)
+                if name_match:
+                    payee_name = name_match.group(1).replace("%20", " ").lower()
+                    
+                    # Example Heuristic anomaly: Claims to be PM Cares but uses a random generic email domain
+                    if "pm" in payee_name and "cares" in payee_name and "sbi" not in merchant_vpa.lower():
+                         is_safe = False
+                         risk_factors.append("HIGH: Merchant Name (PM Cares) does not align with routing Domain (Destination Overlay Detected).")
+                         
+        elif raw_payload.startswith("http"):
+            # It's an HTTP URI, not a UPI command.
+            if not raw_payload.startswith("https"):
+                is_safe = False
+                risk_factors.append("MEDIUM: Link executes over insecure HTTP protocol.")
+                
+            # Simulate checking for known phishing domains
+            if "win" in raw_payload or "free" in raw_payload or "claim" in raw_payload:
+                 is_safe = False
+                 risk_factors.append("HIGH: Payload URL matches known malicious redirection signature.")
+        else:
+            # Random text
+            risk_factors.append("UNKNOWN: Payload is standard text, executing no action.")
+            
+            
+        # Build Checklist Results
+        payload_validation = True if len(raw_payload) > 0 else False
+        tls_validation = True if not "http://" in raw_payload.lower() else False
+        merchant_mapping = True if is_safe and merchant_vpa else (False if merchant_vpa and not is_safe else True)
+        
+        
+        # Log Action
+        new_action = SystemAction(
+            action_type="SCAN_QR",
+            metadata_json={
+                "payload": raw_payload[:50],
+                "is_safe": is_safe,
+                "found_vpa": merchant_vpa
+            },
+            status="success"
+        )
+        db.add(new_action)
+        db.commit()
+        
+        return {
+            "success": True,
+            "is_safe": is_safe,
+            "payload": raw_payload,
+            "merchant_vpa": merchant_vpa,
+            "risk_factors": risk_factors,
+            "checks": {
+                "payload": payload_validation,
+                "tls": tls_validation,
+                "merchant": merchant_mapping
+            }
+        }
+    except Exception as e:
+        logger.error(f"QR Decode Error: {e}")
+        return {
+            "success": False,
+            "error": "Failed to process the QR image file format.",
+            "is_safe": False,
+            "payload": "CORRUPT_PAYLOAD",
+            "risk_factors": ["File Corruption"]
+        }

@@ -46,7 +46,7 @@ export default function UPIPage() {
     const [data, setData] = useState<UPIStats | null>(null);
 
     const [qrScanning, setQrScanning] = useState(false);
-    const [qrResult, setQrResult] = useState(false);
+    const [forensicResult, setForensicResult] = useState<any>(null);
 
     // Message Scanner State
     const [messageText, setMessageText] = useState("");
@@ -99,6 +99,38 @@ export default function UPIPage() {
             console.error("Error scanning message:", error);
         } finally {
             setIsScanning(false);
+        }
+    };
+
+    const handleQRUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setQrScanning(true);
+        setForensicResult(null);
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const res = await fetch(`${API_BASE}/upi/scan-qr`, {
+                method: "POST",
+                body: formData,
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setForensicResult(data);
+                if (data.is_safe === false) performAction('SCAN_QR', 'MALICIOUS_QR_FOUND');
+                else performAction('SCAN_QR', 'SAFE_QR_SCANNED');
+            } else {
+                setForensicResult({ success: false, error: "Server Error processing QR." });
+            }
+        } catch (err) {
+            setForensicResult({ success: false, error: "Network Error" });
+        } finally {
+            setQrScanning(false);
+            e.target.value = ""; // reset input
         }
     };
 
@@ -201,40 +233,100 @@ export default function UPIPage() {
 
                     {activeTab === 'qr' && (
                         <div className="bg-white p-8 rounded-3xl border border-silver/10 shadow-sm text-center">
-                            <div className="w-20 h-20 bg-boxbg rounded-2xl flex items-center justify-center mx-auto mb-4 border border-silver/5">
-                                <QrCode className="text-saffron" size={40} />
+                            <div className={`w-20 h-20 bg-boxbg rounded-2xl flex items-center justify-center mx-auto mb-4 border transition-colors ${qrScanning ? 'border-indblue animate-pulse' : 'border-silver/5'}`}>
+                                <QrCode className={`transition-colors ${qrScanning ? 'text-indblue animate-bounce' : 'text-saffron'}`} size={40} />
                             </div>
                             <h3 className="text-xl font-bold text-indblue mb-2">QR Forensic Analysis</h3>
                             <p className="text-silver text-sm max-w-sm mx-auto mb-8 italic">
                                 Scanned QR codes are analyzed for "Destination Overlay" and "Malicious Redirection" before any payment occurs.
                             </p>
-                            <button
-                                onClick={() => {
-                                    setQrScanning(true);
-                                    performAction('SCAN_QR', 'SIMULATED_PAYLOAD');
-                                    setTimeout(() => {
-                                        setQrScanning(false);
-                                        setQrResult(true);
-                                    }, 2000);
-                                }}
-                                disabled={qrScanning}
-                                className="bg-indblue text-white px-8 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest hover:bg-saffron transition-all inline-block disabled:opacity-50"
-                            >
-                                {qrScanning ? "Processing QR..." : qrResult ? "Scan Successful - Safe" : "Upload QR for Scanning"}
-                            </button>
 
-                            <div className="mt-12 grid grid-cols-3 gap-4">
-                                {[
-                                    { label: 'Payload Validation', status: qrResult ? 'bg-indgreen' : 'bg-silver/30' },
-                                    { label: 'TLS Verification', status: qrResult ? 'bg-indgreen' : 'bg-silver/30' },
-                                    { label: 'Merchant Mapping', status: qrResult ? 'bg-indgreen' : 'bg-silver/30' }
-                                ].map((step, i) => (
-                                    <div key={i} className="p-4 bg-boxbg rounded-xl border border-silver/5">
-                                        <div className={`w-2 h-2 rounded-full mx-auto mb-2 ${step.status}`} />
-                                        <p className="text-[10px] uppercase font-bold text-silver">{step.label}</p>
+                            {!qrScanning && !forensicResult && (
+                                <label className="cursor-pointer bg-indblue text-white px-8 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest hover:bg-saffron transition-all inline-block hover:-translate-y-1 shadow hover:shadow-lg">
+                                    Upload QR for Scanning
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept="image/*"
+                                        onChange={handleQRUpload}
+                                    />
+                                </label>
+                            )}
+
+                            {qrScanning && (
+                                <div className="inline-flex items-center gap-3 bg-indblue/10 text-indblue px-8 py-4 rounded-2xl text-xs font-bold uppercase tracking-widest border border-indblue/20">
+                                    <Loader2 className="animate-spin" size={16} />
+                                    Processing QR...
+                                </div>
+                            )}
+
+                            {forensicResult && !qrScanning && (
+                                <div className="mt-6 text-left animate-in fade-in slide-in-from-bottom-4">
+                                    <div className={`p-6 rounded-2xl border ${forensicResult.is_safe ? 'bg-indgreen/5 border-indgreen/20' : 'bg-red-50 border-red-200'}`}>
+                                        <div className="flex items-start gap-4 mb-4">
+                                            <div className={`p-3 rounded-full shrink-0 ${forensicResult.is_safe ? 'bg-indgreen text-white' : 'bg-redalert text-white'}`}>
+                                                {forensicResult.is_safe ? <CheckCircle2 size={24} /> : <AlertTriangle size={24} />}
+                                            </div>
+                                            <div className="w-full">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <h4 className={`font-bold ${forensicResult.is_safe ? 'text-indgreen' : 'text-redalert'}`}>
+                                                        {forensicResult.is_safe ? "Safe QR Destination" : "Malicious QR Detected"}
+                                                    </h4>
+                                                    {!forensicResult.is_safe && forensicResult.payload !== 'CORRUPT_PAYLOAD' && (
+                                                        <button
+                                                            onClick={() => performAction('INTERCEPT_MESSAGE', 'QR_SCAM')}
+                                                            className="bg-redalert text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase shrink-0">
+                                                            Intercept Trap
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                <div className="mt-2 text-xs font-mono bg-white/50 p-2 rounded border border-silver/10 break-all text-charcoal">
+                                                    <span className="text-silver font-bold uppercase block mb-1 text-[9px]">Decoded Payload:</span>
+                                                    {forensicResult.payload}
+                                                </div>
+
+                                                {forensicResult.risk_factors && forensicResult.risk_factors.length > 0 && (
+                                                    <div className="mt-3 space-y-1">
+                                                        {forensicResult.risk_factors.map((tf: string, idx: number) => (
+                                                            <p key={idx} className={`text-xs ${tf.includes('CRITICAL') || tf.includes('HIGH') ? 'text-redalert font-bold' : 'text-charcoal'}`}>
+                                                                • {tf}
+                                                            </p>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                ))}
-                            </div>
+
+                                    {forensicResult.checks && (
+                                        <div className="mt-8 grid grid-cols-3 gap-4 text-center">
+                                            {[
+                                                { label: 'Payload Validation', status: forensicResult.checks.payload ? 'bg-indgreen' : 'bg-redalert' },
+                                                { label: 'TLS Verification', status: forensicResult.checks.tls ? 'bg-indgreen' : 'bg-redalert' },
+                                                { label: 'Merchant Mapping', status: forensicResult.checks.merchant ? 'bg-indgreen' : 'bg-redalert' }
+                                            ].map((step, i) => (
+                                                <div key={i} className="p-4 bg-boxbg rounded-xl border border-silver/5">
+                                                    <div className={`w-2 h-2 rounded-full mx-auto mb-2 ${step.status}`} />
+                                                    <p className="text-[10px] uppercase font-bold text-silver">{step.label}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <div className="mt-8 text-center">
+                                        <label className="cursor-pointer text-[10px] font-bold text-silver hover:text-indblue uppercase transition-colors">
+                                            Scan Another QR
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                accept="image/*"
+                                                onChange={handleQRUpload}
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
