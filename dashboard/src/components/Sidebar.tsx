@@ -55,9 +55,6 @@ export default function Sidebar() {
         { name: t("recovery"), icon: RotateCcw, href: "/recovery" },
     ];
 
-    // Normalize pathname for comparisons (remove /dashboard prefix if present)
-    const normalizedPathname = pathname.startsWith("/dashboard") ? (pathname.replace("/dashboard", "") || "/") : pathname;
-
     // Filter menu items based on role
     const menuItems = allMenuItems.filter((item) => allowedPages.includes(item.href));
 
@@ -93,7 +90,7 @@ export default function Sidebar() {
 
             <nav className="flex-1 mt-2 px-4 pb-8 space-y-1">
                 {menuItems.map((item) => {
-                    const isActive = normalizedPathname === item.href;
+                    const isActive = pathname === item.href;
                     return (
                         <Link
                             key={item.href}

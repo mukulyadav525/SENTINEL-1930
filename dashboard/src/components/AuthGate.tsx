@@ -11,8 +11,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     const router = useRouter();
 
     useEffect(() => {
-        const isLoginPage = pathname === "/login" || pathname.endsWith("/login");
-        if (!isLoading && !isAuthenticated && !isLoginPage) {
+        if (!isLoading && !isAuthenticated && pathname !== "/login") {
             router.replace("/login");
         }
     }, [isLoading, isAuthenticated, pathname, router]);
@@ -27,7 +26,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     }
 
     // If on login page, always show content
-    if (pathname === "/login" || pathname.endsWith("/login")) {
+    if (pathname === "/login") {
         return <>{children}</>;
     }
 
@@ -36,14 +35,8 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
         return null;
     }
 
-    // Role-based page access check
-    const role = user?.role || "common";
-    const allowedPages = ROLE_ACCESS[role] || ROLE_ACCESS["common"];
-    
-    // Normalize path for comparison (remove /dashboard prefix or handle root)
-    let normalizedPath = pathname.startsWith("/dashboard") ? pathname.replace("/dashboard", "") : pathname;
-    if (!normalizedPath || normalizedPath === "") normalizedPath = "/";
-    
+    // Normalize path for comparison
+    const normalizedPath = pathname;
     const isAllowed = allowedPages.includes(normalizedPath);
 
     if (!isAllowed) {

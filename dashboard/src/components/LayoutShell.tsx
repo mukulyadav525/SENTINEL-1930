@@ -10,7 +10,7 @@ import { usePathname } from "next/navigation";
 function InnerShell({ children }: { children: React.ReactNode }) {
     const { isAuthenticated } = useAuth();
     const pathname = usePathname();
-    const isLoginPage = pathname === "/login" || pathname.endsWith("/login");
+    const isLoginPage = pathname === "/login";
 
     // On the login page, render children without sidebar
     if (isLoginPage || !isAuthenticated) {
