@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # External APIs
     SARVAM_API_KEY: str = Field(..., env="SARVAM_API_KEY")
     GEMINI_API_KEY: Optional[str] = Field(None, env="GEMINI_API_KEY")
+    DEEPGRAM_API_KEY: Optional[str] = Field(None, env="DEEPGRAM_API_KEY")
     
     # Twilio Voice Calling
     TWILIO_ACCOUNT_SID: Optional[str] = Field(None, env="TWILIO_ACCOUNT_SID")
@@ -79,6 +80,8 @@ try:
         os.environ["SECRET_KEY"] = "dev-secret-key-only"
     if os.getenv("ENV") != "prod" and not os.getenv("SARVAM_API_KEY"):
         os.environ["SARVAM_API_KEY"] = "mock-sarvam-key"
+    if os.getenv("ENV") != "prod" and not os.getenv("DEEPGRAM_API_KEY"):
+        os.environ["DEEPGRAM_API_KEY"] = "mock-deepgram-key"
         
     settings = Settings()
 except Exception as e:
@@ -93,6 +96,7 @@ except Exception as e:
             ALGORITHM = "HS256"
             ACCESS_TOKEN_EXPIRE_MINUTES = 480
             SARVAM_API_KEY = "mock-key"
+            DEEPGRAM_API_KEY = "mock-key"
             SQLALCHEMY_DATABASE_URI = "sqlite:///./sentinel.db"
             REDIS_URL = None
             NEO4J_URI = None

@@ -15,6 +15,9 @@ DROP TABLE IF EXISTS honeypot_messages CASCADE;
 DROP TABLE IF EXISTS honeypot_sessions CASCADE;
 DROP TABLE IF EXISTS honeypot_personas CASCADE;
 DROP TABLE IF EXISTS scam_clusters CASCADE;
+DROP TABLE IF EXISTS simulation_requests CASCADE;
+DROP TABLE IF EXISTS mule_ads CASCADE;
+DROP TABLE IF EXISTS crime_reports CASCADE;
 DROP TABLE IF EXISTS system_stats CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 
@@ -84,10 +87,11 @@ CREATE TABLE honeypot_sessions (
     id SERIAL PRIMARY KEY,
     session_id TEXT UNIQUE NOT NULL,
     caller_num TEXT,
+    customer_id TEXT, -- Added for citizen attribution
     persona TEXT,
     status TEXT DEFAULT 'active',
-    handoff_timestamp TIMESTAMPTZ, -- Added for recent integration
-    metadata_json JSONB, -- Added for analysis storage
+    handoff_timestamp TIMESTAMPTZ,
+    metadata_json JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_honeypot_sessions_sid ON honeypot_sessions(session_id);
@@ -98,6 +102,7 @@ CREATE TABLE honeypot_messages (
     session_id INTEGER REFERENCES honeypot_sessions(id) ON DELETE CASCADE,
     role TEXT NOT NULL, -- 'user', 'assistant'
     content TEXT NOT NULL,
+    audio_url TEXT, -- Added for Deepgram recording storage
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -127,11 +132,50 @@ CREATE TABLE system_actions (
 CREATE TABLE scam_clusters (
     id SERIAL PRIMARY KEY,
     cluster_id VARCHAR(50) UNIQUE,
-    risk_level VARCHAR(20), -- 'CRITICAL', 'HIGH', 'MEDIUM'
+    risk_level VARCHAR(20),
     location VARCHAR(100),
+    lat FLOAT,
+    lng FLOAT,
     linked_vpas INTEGER DEFAULT 0,
     honeypot_hits INTEGER DEFAULT 0,
     status VARCHAR(20) DEFAULT 'active',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 11. Simulation Requests
+CREATE TABLE simulation_requests (
+    id SERIAL PRIMARY KEY,
+    phone_number TEXT UNIQUE NOT NULL,
+    status TEXT DEFAULT 'pending', -- pending, approved, rejected
+    requested_at TIMESTAMPTZ DEFAULT NOW(),
+    processed_at TIMESTAMPTZ
+);
+
+-- 12. Mule Advertisements
+CREATE TABLE mule_ads (
+    id SERIAL PRIMARY KEY,
+    title TEXT,
+    salary TEXT,
+    platform TEXT,
+    risk_score FLOAT DEFAULT 0.0,
+    status TEXT,
+    recruiter_id TEXT,
+    metadata_json JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 13. Crime Reports
+CREATE TABLE crime_reports (
+    id SERIAL PRIMARY KEY,
+    report_id TEXT UNIQUE NOT NULL, -- e.g., REQ-5001
+    category TEXT, -- police, bank, telecom
+    scam_type TEXT,
+    amount TEXT,
+    platform TEXT,
+    priority TEXT, -- CRITICAL, HIGH, MEDIUM
+    status TEXT DEFAULT 'PENDING',
+    reporter_num TEXT,
+    metadata_json JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

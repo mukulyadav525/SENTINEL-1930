@@ -3,6 +3,7 @@ node_modules/
 .DS_Store
 __pycache__/
 *.py[cod]
+backend/static/recordings/
 *$py.class
 dist/
 build/

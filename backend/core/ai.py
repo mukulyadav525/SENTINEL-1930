@@ -153,18 +153,21 @@ class SarvamHoneypot:
             return {"scam_type": "UNKNOWN", "risk": "LOW"}
 
         analysis_prompt = (
-            "Analyze the following conversation between a scammer (user) and a honeypot (assistant). "
-            "Extract the following in JSON format: "
-            "1. scam_type (e.g., BANK_FRAUD, UPI_REQUEST, JOB_SCAM, UNKNOWN) "
-            "2. bank_name (if mentioned, otherwise null) "
-            "3. urgency_level (HIGH, MEDIUM, LOW) "
-            "4. details (brief summary of what they wanted) "
-            "5. confidence_score (0-1)"
+            "You are the Sentinel Forensic Intelligence AI. "
+            "Analyze the following conversation history between a potential scammer (user) and an AI honeypot (assistant). "
+            "Extract critical intelligence including scam tactics, financial targets, and operational details. "
+            "Return ONLY a JSON object with these fields: "
+            "1. scam_type: (BANK_FRAUD, UPI_SCAM, JOB_FRAUD, CUSTOMER_SUPPORT_SCAM, UNKNOWN) "
+            "2. bank_name: (Identify the bank or organization being impersonated) "
+            "3. urgency_level: (HIGH, MEDIUM, LOW) "
+            "4. details: (Concise bullet points of specific 'fraud details' like account requests, apps mentioned, or threatening language) "
+            "5. risk_score: (0.0 to 1.0 reflecting certainty of fraud) "
+            "6. key_entities: (List of names, phone numbers, or VPA handles mentioned by the scammer)"
         )
 
         messages = [
             {"role": "system", "content": analysis_prompt},
-            {"role": "user", "content": str(history)}
+            {"role": "user", "content": f"CONVERSATION HISTORY:\n{json.dumps(history, indent=2)}"}
         ]
 
         if not self.api_key:

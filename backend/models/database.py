@@ -88,6 +88,7 @@ class HoneypotMessage(Base):
     session_id = Column(Integer, ForeignKey("honeypot_sessions.id"))
     role = Column(String) # user, assistant
     content = Column(String)
+    audio_url = Column(String, nullable=True) # Path to recorded audio turn
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
     
     session = relationship("HoneypotSession", back_populates="messages")
