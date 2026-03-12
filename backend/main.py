@@ -19,6 +19,7 @@ from api.upi import router as upi_router
 from api.bharat import router as bharat_router
 from api.mule import router as mule_router
 from api.twilio_call import router as twilio_router
+from api.simulation import router as simulation_router
 from core.security import security_logging_middleware
 from core.logging_config import setup_production_logging
 
@@ -145,6 +146,7 @@ app.include_router(upi_router, prefix="/api/v1/upi", tags=["upi"])
 app.include_router(bharat_router, prefix="/api/v1/bharat", tags=["bharat"])
 app.include_router(mule_router, prefix="/api/v1/mule", tags=["mule"])
 app.include_router(twilio_router, prefix="/api/v1/twilio", tags=["twilio"])
+app.include_router(simulation_router, prefix="/api/v1/auth/simulation", tags=["simulation"])
 
 @app.get("/")
 async def root():

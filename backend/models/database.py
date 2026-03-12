@@ -132,3 +132,11 @@ class ScamCluster(Base):
     honeypot_hits = Column(Integer, default=0)
     status = Column(String, default="active")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class SimulationRequest(Base):
+    __tablename__ = "simulation_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    phone_number = Column(String, unique=True, index=True)
+    status = Column(String, default="pending") # pending, approved, rejected
+    requested_at = Column(DateTime, default=datetime.datetime.utcnow)
+    processed_at = Column(DateTime, nullable=True)

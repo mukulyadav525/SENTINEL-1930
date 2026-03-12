@@ -16,9 +16,11 @@ import FeedModal from "@/components/FeedModal";
 import CustomerSearchModal from "@/components/CustomerSearchModal";
 import StatDetailModal from "@/components/StatDetailModal";
 import LiveTicker from "@/components/LiveTicker";
+import ManagementOverlay from "@/components/ManagementOverlay";
 import { useLanguage } from "@/context/LanguageContext";
 import { useActions } from "@/hooks/useActions";
 import { API_BASE } from "@/config/api";
+import { Settings } from "lucide-react";
 
 
 interface OverviewData {
@@ -63,6 +65,7 @@ export default function OverviewPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedStatType, setSelectedStatType] = useState<"scams" | "citizens" | "savings" | "threats" | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isManagementOpen, setIsManagementOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -344,6 +347,22 @@ export default function OverviewPage() {
         data={data}
         onActionClick={handleModalActionClick}
       />
+
+      <ManagementOverlay 
+        isOpen={isManagementOpen}
+        onClose={() => setIsManagementOpen(false)}
+      />
+
+      {/* Floating Management Button */}
+      <button 
+        onClick={() => setIsManagementOpen(true)}
+        className="fixed bottom-32 right-8 w-16 h-16 bg-indblue text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-all z-50 animate-bounce hover:animate-none group"
+      >
+        <Settings size={28} className="group-hover:rotate-90 transition-transform duration-500" />
+        <div className="absolute right-20 bg-white border border-silver/10 px-4 py-2 rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+            <p className="text-[10px] font-black text-indblue uppercase tracking-widest">Command Management</p>
+        </div>
+      </button>
     </div>
   );
 }

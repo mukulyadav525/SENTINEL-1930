@@ -141,6 +141,33 @@ export default function SimulationPortal() {
     }
   }, [activeFeature]);
 
+  // Poll for Admin Approval
+  useEffect(() => {
+    let interval: any;
+    if (authStatus === 'pending' && customerId) {
+      const checkStatus = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/auth/simulation/status/${customerId}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === 'approved') {
+              setAuthStatus('approved');
+              toast.success("Security Clearance Granted");
+            } else if (data.status === 'rejected') {
+              setAuthStatus('login');
+              toast.error("Access Request Denied by HQ");
+            }
+          }
+        } catch (e) {
+          console.error("Approval poll failed:", e);
+        }
+      };
+      checkStatus();
+      interval = setInterval(checkStatus, 5000);
+    }
+    return () => clearInterval(interval);
+  }, [authStatus, customerId]);
+
   // Deepfake Scan Progress Effect
   useEffect(() => {
     if (isDeepfakeScanning && scanProgress < 100) {
@@ -583,10 +610,21 @@ export default function SimulationPortal() {
             </div>
 
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (customerId.length >= 10) {
-                  setAuthStatus("pending");
-                  toast.success(`Request Sent for approval: ${customerId}`);
+                  try {
+                    const res = await fetch(`${API_BASE}/auth/simulation/request`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ phone_number: customerId })
+                    });
+                    if (res.ok) {
+                      setAuthStatus("pending");
+                      toast.success(`Request Sent to HQ: ${customerId}`);
+                    }
+                  } catch (e) {
+                    toast.error("HQ Connection Failed");
+                  }
                 } else {
                   toast.error("Please enter a valid Phone Number");
                 }
@@ -615,15 +653,12 @@ export default function SimulationPortal() {
             Security clearance is being verified by the National Command Dashboard. Please wait for official approval.
           </p>
           
-          <button
-            onClick={() => {
-              setAuthStatus("approved");
-              toast.success("Identity Clear: Access Granted");
-            }}
-            className="w-full py-5 bg-indgreen text-white rounded-2xl font-black text-sm hover:bg-indgreen/90 transition-all shadow-xl shadow-indgreen/20 flex items-center justify-center gap-3"
-          >
-            <ShieldCheck size={20} /> SIMULATE ADMIN APPROVAL
-          </button>
+          <div className="w-full h-2 bg-boxbg rounded-full overflow-hidden mt-8">
+            <div className="h-full bg-saffron animate-[pulse_2s_infinite]" style={{width: '60%'}} />
+          </div>
+          <p className="text-[10px] text-silver font-bold uppercase tracking-widest mt-6">
+            Connecting to <span className="text-indblue">Sentinel HQ...</span>
+          </p>
         </div>
       )}
 
