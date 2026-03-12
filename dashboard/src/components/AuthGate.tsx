@@ -11,7 +11,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     const router = useRouter();
 
     useEffect(() => {
-        const isLoginPage = pathname === "/login" || pathname === "/dashboard/login";
+        const isLoginPage = pathname === "/login" || pathname.endsWith("/login");
         if (!isLoading && !isAuthenticated && !isLoginPage) {
             router.replace("/login");
         }
@@ -27,7 +27,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     }
 
     // If on login page, always show content
-    if (pathname === "/login" || pathname === "/dashboard/login") {
+    if (pathname === "/login" || pathname.endsWith("/login")) {
         return <>{children}</>;
     }
 

@@ -41,6 +41,10 @@ export default function LoginPage() {
                 background: "linear-gradient(135deg, #00216A 0%, #001142 40%, #0a0a2e 70%, #000814 100%)",
             }}
         >
+            {/* Diagnostic Tag */}
+            <div className="absolute top-4 left-4 z-50 px-2 py-1 bg-saffron text-[10px] font-bold text-white rounded opacity-50">
+                SENTINEL_LOGIN_V1.1
+            </div>
             {/* Animated background elements */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-1/4 -left-32 w-96 h-96 bg-saffron/5 rounded-full blur-3xl animate-pulse" />
