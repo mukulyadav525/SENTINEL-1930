@@ -35,6 +35,10 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
         return null;
     }
 
+    // Role-based page access check
+    const role = user?.role || "common";
+    const allowedPages = ROLE_ACCESS[role] || ROLE_ACCESS["common"];
+    
     // Normalize path for comparison
     const normalizedPath = pathname;
     const isAllowed = allowedPages.includes(normalizedPath);
